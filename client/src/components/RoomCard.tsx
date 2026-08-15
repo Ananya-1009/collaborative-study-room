@@ -1,14 +1,14 @@
 type RoomCardProps={
     name:string;
-    code:string;
-    members:number;
+    topic: string;
+    code: string;
 };
-function RoomCard({name,code,members}:RoomCardProps){
+function RoomCard({name,code,topic}:RoomCardProps){
     return(
         <div className="room-card">
         <h2>{name}</h2>
         <p>Room code: {code}</p>
-        <p>{members} members</p>
+        <p>Topic:{topic} members</p>
     </div>
     );
 }
