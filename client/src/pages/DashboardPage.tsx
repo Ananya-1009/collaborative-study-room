@@ -2,9 +2,10 @@ import RoomCard from "../components/RoomCard";
 import CreateRoomForm from "../components/CreateRoomForm";
 import { useEffect,useState } from "react";
 type Room = {
-  name: string;
-  topic: string;
-  code: string;
+    id:number,
+    name: string;
+    topic: string;
+    code: string;
 };
 function DashboardPage(){
     const [rooms, setRooms] = useState<Room[]>([]);
@@ -32,13 +33,20 @@ function DashboardPage(){
         }
         fetchData();
     }, []);
-    function handleCreateRoom(roomName: string, topic: string) {
-    const newRoom: Room = {
-        name: roomName,
-        topic: topic,
-        code: "ABC123",
-    };
-    setRooms([...rooms, newRoom]);
+    async function handleCreateRoom(roomName: string, topic: string) {
+        const response= await fetch("http://localhost:5000/api/rooms",{
+            method:"Post",
+            headers:{
+                "Content-Type":"application/json",
+            },
+            body: JSON.stringify({
+                name:roomName,
+                topic:topic,
+            }),
+        });
+        const data:Room=await response.json();
+        setRooms((currentRooms) => [...currentRooms, data]);
+        console.log(data)
     }
     return(
         <div>
