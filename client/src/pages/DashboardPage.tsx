@@ -15,14 +15,12 @@ function DashboardPage(){
         async function fetchData() {
             setIsLoading(true);
             try{
-                const response = await fetch(
-                    "https://jsonplaceholder.typicode.com/posts"
-                );
+                const response=await fetch("http://localhost:5000/api/rooms");
                 if (!response.ok) {
                     throw new Error("Failed to fetch data");
                 }
                 const data = await response.json();
-                console.log(data);
+                setRooms(data);
             }
             catch(error){
                 setError("ERROR IN LOADING DATA")

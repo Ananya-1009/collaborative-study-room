@@ -43,7 +43,7 @@ app.get("/api/rooms/:id",(req,res)=>{
   const id=Number(req.params.id);
   const room=rooms.find((room)=>room.id===id);
   if(room==undefined){
-    return res.status(400).json({
+    return res.status(404).json({
       error: "ROOM NOT FOUND"
     });
   }
