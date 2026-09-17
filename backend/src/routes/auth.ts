@@ -62,16 +62,24 @@ router.post("/login",async(req,res)=>{
                 error:"Invalid email or password",
             });
         }
-        const token=jwt.sign({
-            userId: user.id,
-        },
-        process.env.JWT_SECRET as string,
-        {
-            expiresIn:"1h",
-        }
+        const accessToken=jwt.sign(
+            {userId: user.id},
+            process.env.JWT_SECRET as string,
+            {expiresIn:"15m",}
         );
+        const refreshToken=jwt.sign(
+            {userId:user.id},
+            process.env.JWT_SECRET as string,
+            {expiresIn:"7d"}
+        )
+        res.cookie("refreshToken",refreshToken,{
+            httpOnly:true,
+            secure:false,
+            sameSite:"lax",
+            maxAge:7*24*60*60*1000,
+        });
         res.json({
-            token,
+            accessToken,
             user:{
                 id:user.id,
                 username:user.username,
@@ -82,6 +90,32 @@ router.post("/login",async(req,res)=>{
         console.error("Login failed:",error);
         res.status(500).json({
             error:"Login failed",
+        });
+    }
+});
+router.post("/refresh",(req,res)=>{
+    const refreshToken=req.cookies.refreshToken;
+    if(!refreshToken){
+        return res.status(401).json({
+            error:"Refresh token missing",
+        });
+    }
+    try{
+        const decoded=jwt.verify(
+            refreshToken,
+            process.env.JWT_SECRET as string
+        ) as {userId:number};
+        const accessToken=jwt.sign(
+            {userId:decoded.userId},
+            process.env.JWT_SECRET as string,
+            {expiresIn:"15m"}
+        )
+        res.json({
+            accessToken,
+        });
+    }catch(error){
+        return res.status(401).json({
+            error:"Invalid or expired refresh token",
         });
     }
 });
