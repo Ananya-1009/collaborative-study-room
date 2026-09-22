@@ -52,7 +52,22 @@ function LoginPage(){
                         <span className="feature-dot"></span>
                         Real-time collaboration
                     </div>
+                    <div className="intro-preview">
+                    <div className="preview-card">
+                        <span>FOCUS SESSION</span>
+                        <strong>25:00</strong>
+                    </div>
 
+                    <div className="preview-card">
+                        <span>STUDY TOGETHER</span>
+                        <div className="preview-people">
+                        <i></i>
+                        <i></i>
+                        <i></i>
+                        <b>+2</b>
+                        </div>
+                    </div>
+                    </div>
                     <div>
                         <span className="feature-dot"></span>
                         Track your progress
@@ -76,7 +91,7 @@ function LoginPage(){
                         placeholder="Enter your email"
                         value={email}
                         onChange={(event)=>setEmail(event.target.value)}
-                    />
+                        />
                     </div>
                     <div className="form-group">
                         <label htmlFor="password">Password</label>
@@ -88,9 +103,25 @@ function LoginPage(){
                         onChange={(event)=>setPassword(event.target.value)}
                     />
                     </div>
+                    <div className="login-options">
+                    <label>
+                        <input type="checkbox" />
+                        <span>Remember me</span>
+                    </label>
+                    <button type="button" className="forgot-password">
+                        Forgot password?
+                    </button>
+                    </div>
                     <button type="submit">
                         Login
                     </button>
+                    <div className="register-prompt">
+                        <span>Don't have an account?</span>
+                        <button type="button" className="register-link"
+                        onClick={()=>navigate("/register")}>
+                            Register
+                        </button>
+                    </div>
                 </form>
                 {error && <p className="login-error">{error}</p>}
             </div>

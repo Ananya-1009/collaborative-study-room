@@ -62,7 +62,13 @@ router.post("/",authenticate,async(req,res)=>{
 });
 router.get("/",authenticate,async(req,res)=>{
   try{
-    const result=await pool.query("Select * from rooms order by id asc");
+    const result=await pool.query(`SELECT DISTINCT r.*
+   FROM rooms r
+   JOIN room_members rm
+     ON r.id = rm.room_id
+   WHERE rm.user_id = $1
+   ORDER BY r.id ASC`,
+  [req.userId]);
     res.json(result.rows);
   }catch(error){
     console.error("Failed to fetch rooms:",error);
@@ -71,6 +77,23 @@ router.get("/",authenticate,async(req,res)=>{
     });
   }
 })
+router.get("/code/:code",authenticate,async(req,res)=>{
+  const {code}=req.params;
+  try{
+    const result=await pool.query(`Select r.* from rooms r join room_members rm on r.id=rm.room_id where r.code=$1 and rm.user_id=$2`,[code,req.userId]);
+    if(result.rows.length===0){
+      return res.status(404).json({
+        error:"Room not found",
+      });
+    }
+    res.json(result.rows[0]);
+  }catch(error){
+    console.error("Failed to fetch room:",error);
+    res.status(500).json({
+      error:"Failed to fetch room",
+    });
+  }
+});
 router.get("/:id",authenticate,requireRoomMember,async(req,res)=>{
   const id=Number(req.params.id);
   try{

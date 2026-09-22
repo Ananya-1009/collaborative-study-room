@@ -6,6 +6,7 @@ import StudyRoomPage from "./pages/StudyRoomPage";
 import LoginPage from "./pages/LoginPage";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
+import RegisterPage from "./pages/RegisterPage";
 function App(){
   return(
     <AuthProvider>
@@ -18,6 +19,7 @@ function App(){
           </ProtectedRoute>}/>
         <Route path="/rooms/:roomCode" element={<StudyRoomPage/>}/>
         <Route path="/login" element={<LoginPage/>}/>
+        <Route path="/register" element={<RegisterPage />}/>
       </Routes>
       </BrowserRouter>
     </AuthProvider>

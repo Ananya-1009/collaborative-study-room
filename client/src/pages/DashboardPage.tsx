@@ -1,6 +1,8 @@
 import RoomCard from "../components/RoomCard";
 import CreateRoomForm from "../components/CreateRoomForm";
 import { useEffect,useState } from "react";
+import { useContext } from "react";
+import { AuthContext } from "../context/AuthContext";
 type Room = {
     id:number,
     name: string;
@@ -11,11 +13,16 @@ function DashboardPage(){
     const [rooms, setRooms] = useState<Room[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState("");
+    const { accessToken } = useContext(AuthContext);
     useEffect(() => {
         async function fetchData() {
             setIsLoading(true);
             try{
-                const response=await fetch("http://localhost:5000/api/rooms");
+                const response=await fetch("http://localhost:5000/api/rooms",{
+                    headers:{
+                        Authorization:`Bearer ${accessToken}`,
+                    },
+                });
                 if (!response.ok) {
                     throw new Error("Failed to fetch data");
                 }
@@ -36,6 +43,7 @@ function DashboardPage(){
             method:"Post",
             headers:{
                 "Content-Type":"application/json",
+                Authorization:`Bearer ${accessToken}`,
             },
             body: JSON.stringify({
                 name:roomName,
