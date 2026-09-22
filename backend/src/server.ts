@@ -63,7 +63,33 @@ io.use((socket,next)=>{
 });
 io.on("connection",(socket)=>{
   console.log("Socket connected",socket.id);
-  socket.on("disconnect",()=>{
-    console.log("Socket disconnected:",socket.id);
+  socket.on("join-room",async(roomCode)=>{
+    const roomName=`study-room-${roomCode}`;
+    socket.join(roomName);
+    socket.data.roomName=roomName;
+    const result=await pool.query(
+      `Select username from users where id=$1`,[socket.data.userId]
+    );
+    const username=result.rows[0]?.username;
+    io.to(roomName).emit("user-joined",{
+      userId:socket.data.userId,
+      username,
+    });
+    console.log(
+      `Socket ${socket.id} joined room ${roomName}`
+    );
+  });
+  socket.on("disconnect",async()=>{
+    const userId=socket.data.userId;
+    const roomName=socket.data.roomName;
+    console.log(`Socket disconnected: ${socket.id}, user: ${userId}`);
+    const socketsInRoom=await io.in(roomName).fetchSockets();
+    const userStillConnected=socketsInRoom.some(
+      (connectedSocket)=>connectedSocket.data.userId===userId
+    );
+    console.log("User still connected:", userStillConnected);
+    if(!userStillConnected){
+      io.to(roomName).emit("user-left",{userId});
+    }
   });
 });
