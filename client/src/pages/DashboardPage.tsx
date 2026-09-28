@@ -14,6 +14,7 @@ function DashboardPage(){
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState("");
     const { accessToken } = useContext(AuthContext);
+    
     useEffect(() => {
         async function fetchData() {
             setIsLoading(true);

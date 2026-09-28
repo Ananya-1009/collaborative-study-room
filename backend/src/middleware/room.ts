@@ -5,6 +5,7 @@ export async function requireRoomMember(
     res:Response,
     next:NextFunction
 ){
+    
     const roomId=Number(req.params.id);
     if(!Number.isInteger(roomId) || roomId<=0){
         return res.status(400).json({

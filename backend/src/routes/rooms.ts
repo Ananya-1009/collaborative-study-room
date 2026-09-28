@@ -3,6 +3,8 @@ import pool from "../db.js";
 import { authenticate } from "../middleware/auth.js";
 import { requireRoomMember } from "../middleware/room.js";
 import { requireRoomOwner } from "../middleware/roomOwner.js";
+import upload from "../middleware/upload.js"
+import { io } from "../server.js"
 const router=Router();
 function generateRoomCode(): string{
   return Math.random().toString(36).substring(2,8).toUpperCase();
@@ -156,6 +158,18 @@ router.get("/:id/members",authenticate,requireRoomMember,async(req,res)=>{
     });
   }
 });
+router.get("/:id/messages",authenticate,requireRoomMember,async(req,res)=>{
+  const roomId=Number(req.params.id);
+  try{
+    const result=await pool.query(
+      `SELECT messages.id,messages.content,messages.created_at,users.id as user_id,users.username from messages join users on users.id=messages.user_id where messages.room_id=$1 order by messages.created_at asc`,[roomId]
+    );
+    res.json(result.rows);
+  }catch(error){
+    console.error("Failed to fetch messages:",error);
+    res.status(500).json({error:"Failed to fetch messages"});
+  }
+});
 router.post(":id/leave",authenticate,requireRoomMember,async(req,res)=>{
   const roomId=Number(req.params.id);
   try{
@@ -241,4 +255,234 @@ router.patch("/:id",authenticate,requireRoomOwner,async(req,res)=>{
     });
   }
 })
+console.log("START SESSION ROUTE REGISTERED");
+
+router.post(
+  "/:id/sessions/start",
+  authenticate,
+  requireRoomMember,
+  async(req,res)=>{
+    console.log("START SESSION HANDLER HIT");
+    const roomId=Number(req.params.id);
+    try{
+      const activeSession=await pool.query(
+        `Select id,started_at,started_by from study_sessions where room_id=$1 and ended_at is null`,[roomId]
+      );
+      if(activeSession.rows.length>0){
+        return res.status(400).json({
+          error:"A study session is already active",
+        });
+      }
+      const result=await pool.query(
+        `Insert into study_sessions(room_id,started_by) values($1,$2) returning id,room_id,started_by,started_at,ended_at`,[roomId,req.userId] 
+      );
+      res.status(201).json(result.rows[0]);
+    }
+    catch(error){
+      console.error("Failed to start study session:",error);
+      res.status(500).json({
+        error:"Failed to start study session",
+      });
+    }
+  }
+);
+router.get(
+  "/:id/sessions/active",
+  authenticate,
+  requireRoomMember,
+  async(req,res)=>{
+    const roomId=Number(req.params.id);
+    try{
+      const result=await pool.query(
+        `Select id,room_id,started_by,started_at,ended_at from study_sessions where room_id=$1 and ended_at is NULL`,[roomId]
+      );
+      if(result.rows.length===0){
+        return res.json(null);
+      }
+      res.json(result.rows[0]);
+    }catch(error){
+      console.error("Failed to fetch active session:",error);
+      res.status(500).json({
+        error:"Failed to fetch active session",
+      });
+    }
+  }
+);
+router.patch(
+  "/:id/sessions/:sessionId/end",
+  authenticate,
+  requireRoomMember,
+  async(req,res)=>{
+    const sessionId=Number(req.params.sessionId);
+    try{
+      const result=await pool.query(
+        `Update study_sessions set ended_at=Current_timestamp where id=$1 and started_by=$2 and ended_at is null returning id,room_id,started_by,started_at,ended_at`,[sessionId,req.userId]
+      );
+      if(result.rows.length===0){
+        return res.status(404).json({
+          error:"Active session not found or you cannot end it",
+        });
+      }
+      res.json(result.rows[0]);
+    }catch(error){
+      console.error("Failed to end study session:",error);
+      res.status(500).json({
+        error:"Failed to end study session",
+      });
+    }
+  }
+);
+router.get(
+  "/:id/resources",
+  authenticate,
+  requireRoomMember,
+  async(req,res)=>{
+    const roomId=Number(req.params.id);
+    try{
+      const result=await pool.query(
+        `Select id,title,url,resource_type,added_by,created_at from resources where room_id=$1 order by created_at ASC`,[roomId]
+      );
+      res.json(result.rows);
+    }catch(error){
+      console.error("Failed to fetch resources:",error);
+      res.status(500).json({
+        error:"Failed to fetch resources",
+      });
+    }
+  }
+);
+router.post(
+  "/:id/resources",
+  authenticate,
+  requireRoomMember,
+  async(req,res)=>{
+    const roomId=Number(req.params.id);
+    const {title,url,resource_type}=req.body;
+    const roomResult=await pool.query(
+      `Select code from rooms where id=$1`,[roomId]
+    );
+    if(roomResult.rows.length===0){
+      return res.status(404).json(
+        {
+          error:"Room not found",
+        }
+      );
+    }
+    const roomCode=roomResult.rows[0].code;
+    if(!title || !resource_type){
+      return res.status(400).json({
+        error:"Title and resource type are required",
+      });
+    }
+    try{
+      const result=await pool.query(
+        `Insert into resources (room_id,added_by,title,url,resource_type) values($1,$2,$3,$4,$5) returning id,room_id,added_by,title,url,resource_type,created_at`,[roomId,req.userId,title,url||null,resource_type]
+      );
+      io.to(`study-room-${roomCode}`).emit("new-resource",result.rows[0]);
+      res.status(201).json(result.rows[0]);
+    }catch(error){
+      console.error("Failed to create resoucre:",error);
+      res.status(500).json({
+        error:"Failed to create resource",
+      });
+    }
+  }
+);
+router.post(
+  "/:id/resources/upload",
+  authenticate,
+  requireRoomMember,
+  upload.single("file"),
+  async (req,res)=>{
+    const roomId=Number(req.params.id);
+    if(!req.file){
+      return res.status(400).json({
+        eror:"PDF file is required",
+      });
+    }
+    try{
+      const result=await pool.query(
+        `Insert into resources (room_id,added_by,title,url,resource_type) values($1,$2,$3,$4,$5) returning id,room_id,added_by,title,url,resource_type,created_at`,[
+          roomId,
+          req.userId,
+          req.file.originalname,
+          `/uploads/${req.file.filename}`,
+          "pdf",
+        ]
+      );
+      res.status(201).json(result.rows[0]);
+    }catch(error){
+      console.error("Failed to upload resources:",error);
+      res.status(500).json({
+        error:"Failed to upload resources",
+      });
+    }
+  }
+);
+router.get(
+  "/:id/problems",
+  authenticate,
+  requireRoomMember,
+  async (req,res)=>{
+    const roomId=Number(req.params.id);
+    try{
+      const result=await pool.query(
+        `Select id,title,url,difficulty,topic,added_by,created_at from problems where room_id=$1 order by created_at asc`,
+        [roomId]
+      );
+      res.json(result.rows);
+    }catch(error){
+      console.error("Failed to fetch problems:",error);
+      res.status(500).json({
+        error:"Failed to fetch problems",
+      });
+    }
+  }
+);
+router.post(
+  "/:id/problems",
+  authenticate,
+  requireRoomMember,
+  async (req,res)=>{
+    const roomId=Number(req.params.id);
+    const {title,url,difficulty,topic}=req.body;
+    if(!title || !difficulty || !topic){
+      return res.status(400).json({
+        error:"Title,difficulty and topic are required",
+      });
+    }
+    try {
+      const result=await pool.query(
+        `Insert into problems (room_id,added_by,title,url,difficulty,topic) values($1,$2,$3,$4,$5,$6) returning id,room_id,added_by,title,url,difficulty,topic,created_at`,[
+          roomId,
+          req.userId,
+          title,
+          url || null,
+          difficulty,
+          topic,
+        ]
+      );
+      const roomResult=await pool.query(
+        `Select code from rooms where id=$1`,
+        [roomId]
+      );
+      if(roomResult.rows.length===0){
+        return res.status(404).json({
+          error:"Room not found",
+        });
+      }
+      const roomCode=roomResult.rows[0].code;
+      io.to(`study-room-${roomCode}`).emit(
+        "new-problem",
+        result.rows[0]
+      );
+      res.status(201).json(result.rows[0]);
+    }catch(error){
+      console.error("Failed to create problem:",error);
+      res.status(500).json({
+        error:"Failed to create problem",
+      });
+    }
+  }
+);
 export default router;

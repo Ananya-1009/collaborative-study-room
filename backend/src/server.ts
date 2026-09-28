@@ -23,6 +23,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use("/api/auth", authRouter);
 app.use("/api/rooms",roomRouter);
+app.use("/uploads",express.static("uploads"));
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
@@ -48,6 +49,7 @@ const io=new Server(httpServer,{
     credentials:true,
   },
 });
+export {io};
 io.use((socket,next)=>{
   const token=socket.handshake.auth.token;
   if(!token){
@@ -67,6 +69,9 @@ io.on("connection",(socket)=>{
     const roomName=`study-room-${roomCode}`;
     socket.join(roomName);
     socket.data.roomName=roomName;
+    const socketsInRoom=await io.in(roomName).fetchSockets();
+    const onlineUserIds=socketsInRoom.map((connectedSocket)=>connectedSocket.data.userId);
+    io.to(roomName).emit("online-users",onlineUserIds);
     const result=await pool.query(
       `Select username from users where id=$1`,[socket.data.userId]
     );
@@ -79,6 +84,25 @@ io.on("connection",(socket)=>{
       `Socket ${socket.id} joined room ${roomName}`
     );
   });
+  socket.on("send-message",async(data)=>{
+    console.log("MESSAGE RECEIVED:",data);
+    const roomName=`study-room-${data.roomCode}`;
+    const result=await pool.query(`SELECT username from users where id=$1`,[socket.data.userId]);
+    const roomResult=await pool.query(`SELECT id from rooms where code=$1`,[data.roomCode]);
+    if(roomResult.rows.length===0){
+      return;
+    }
+    const roomId=roomResult.rows[0].id;
+    await pool.query(
+      `INSERT Into messages(room_id,user_id,content) values($1,$2,$3)`,[roomId,socket.data.userId,data.content]
+    );
+    const username=result.rows[0]?.username;
+    io.to(roomName).emit("new-message",{
+      userId:socket.data.userId,
+      username,
+      content:data.content,
+    });
+  })
   socket.on("disconnect",async()=>{
     const userId=socket.data.userId;
     const roomName=socket.data.roomName;
@@ -92,4 +116,12 @@ io.on("connection",(socket)=>{
       io.to(roomName).emit("user-left",{userId});
     }
   });
+  socket.on("session-started",(data)=>{
+    const roomName=`study-room-${data.roomCode}`;
+    io.to(roomName).emit("session-started",data);
+  });
+  socket.on("session-ended",(data)=>{
+    const roomName=`study-room-${data.roomCode}`;
+    io.to(roomName).emit("session-ended");
+  })
 });
