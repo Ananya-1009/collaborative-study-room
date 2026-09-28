@@ -111,6 +111,7 @@ The project focuses on real-time collaboration, REST APIs, authentication, relat
 ```
 
 ## Project Structure
+```
 collaborative-study-room/
 │
 ├── client/
@@ -134,59 +135,59 @@ collaborative-study-room/
 │   └── uploads/
 │
 └── README.md
+```
 ## Running the Project
-Prerequisites
-Node.js
-npm
+### Prerequisites
+Node.js\
+npm\
 PostgreSQL
-Backend
-cd backend
-npm install
-npm run dev
-
-The backend runs on:
-
+### Backend
+cd backend\
+npm install\
+npm run dev\
+\
+The backend runs on:\
+\
 http://localhost:5000
-Frontend
 
+### Frontend
 In a separate terminal:
 
-cd client
-npm install
-npm run dev
-
-The frontend runs on:
-
+cd client\
+npm install\
+npm run dev\
+\
+The frontend runs on:\
 http://localhost:5173
-Database
-
-Create a PostgreSQL database named:
-
-collaborative_study_room
-
-Configure the database credentials and JWT secret in the backend .env file.
-
-Run the migrations:
-
-cd backend
-npm run migrate -- up
-Current Progress
- [x] Authentication
- [x] Study rooms
- [x] PostgreSQL integration
- [x] Socket.IO integration
- [x] Real-time chat
- [x] Persistent chat history
- [x] Study sessions and synchronized timer
- [x] Resource sharing
- [x] PDF upload
- [x] Coding/DSA problem sharing
- [x] Real-time problem synchronization
- [ ] Problem completion tracking
- [ ] Resource completion tracking
- [ ] Polls and voting
- [ ] Shared notes/whiteboard
- [ ] Activity feed
- [ ] Redis Pub/Sub
- [ ] Testing
+### Database
+Create a PostgreSQL database named:\
+collaborative_study_room\
+\
+Configure the database credentials and JWT secret in the backend .env file.\
+\
+Run the migrations:\
+\
+cd backend\
+npm run migrate -- up\
+\
+\
+Current Progress\
+ [x] Authentication\
+ [x] Study rooms\
+ [x] PostgreSQL integration\
+ [x] Socket.IO integration\
+ [x] Real-time chat\
+ [x] Persistent chat history\
+ [x] Study sessions and synchronized timer\
+ [x] Resource sharing\
+ [x] PDF upload\
+ [x] Coding/DSA problem sharing\
+ [x] Real-time problem synchronization\
+ [ ] Problem completion tracking\
+ [ ] Resource completion tracking\
+ [ ] Polls and voting\
+ [ ] Shared notes/whiteboard\
+ [ ] Activity feed\
+ [ ] Redis Pub/Sub\
+ [ ] Testing\
  [ ] Docker and deployment
