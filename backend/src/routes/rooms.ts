@@ -5,6 +5,7 @@ import { requireRoomMember } from "../middleware/room.js";
 import { requireRoomOwner } from "../middleware/roomOwner.js";
 import upload from "../middleware/upload.js"
 import { io } from "../server.js"
+import { release } from "node:os";
 const router=Router();
 function generateRoomCode(): string{
   return Math.random().toString(36).substring(2,8).toUpperCase();
@@ -427,8 +428,8 @@ router.get(
     const roomId=Number(req.params.id);
     try{
       const result=await pool.query(
-        `Select id,title,url,difficulty,topic,added_by,created_at from problems where room_id=$1 order by created_at asc`,
-        [roomId]
+        `Select problems.id,problems.title,problems.url,problems.difficulty,problems.topic,problems.added_by,problems.created_at, EXISTS(Select 1 from problem_completions where problem_completions.problem_id=problems.id and problem_completions.user_id=$2) as completed from problems where problems.room_id=$1 order by problems.created_at asc`,
+        [roomId,req.userId]
       );
       res.json(result.rows);
     }catch(error){
@@ -485,4 +486,74 @@ router.post(
     }
   }
 );
+router.post("/:id/problems/:problemId/complete",authenticate,requireRoomMember,async(req,res)=>{
+  const problemId=Number(req.params.problemId);
+  if(!Number.isInteger(problemId) || problemId<=0){
+    return res.status(400).json({
+      error:"Invalid problem ID",
+    });
+  }
+  try{
+    const problemResult=await pool.query(`Select id from problems where id=$1 and room_id=$2`,[problemId,req.params.id]);
+    if(problemResult.rows.length===0){
+      return res.status(400).json({
+        error:"Problem not found",
+      });
+    }
+    const result=await pool.query(
+      `Insert into problem_completions (problem_id,user_id) values($1,$2) on conflict(problem_id,user_id) do nothing returning problem_id,user_id,completed_at`,[problemId,req.userId]
+    );
+    res.status(201).json(
+      result.rows[0] || {
+        message:"Problem already completed",
+      }
+    );
+    const roomResult=await pool.query(`Select code from rooms where id=$1`,[req.params.id]);
+    const roomCode=roomResult.rows[0].code;
+    io.to(`study-room-${roomCode}`).emit("problem-completed",{
+      problemId,
+      userId:req.userId,
+    });
+  }catch(error){
+    console.error("Failed to complete problem:",error);
+    res.status(500).json({
+      error:"Failed to complete problem",
+    });
+  }
+});
+router.post("/:id/polls",authenticate,requireRoomMember,async(req,res)=>{
+  const roomId=Number(req.params.id);
+  const {question,options}=req.body;
+  if(!question || !Array.isArray(options) || options.length<2){
+    return res.status(400).json({
+      error:"Question and at least two options are required",
+    });
+  }
+  const client=await pool.connect();
+  try{
+    await client.query("BEGIN");
+    const pollResult=await client.query(
+      `Insert into polls (room_id,created_by,question) values($1,$2,$3) returning id,room_id,created_by,question,created_at`,[roomId,req.userId,question.trim()]
+    );
+    const poll=pollResult.rows[0];
+    const createdOptions=[];
+    for(const option of options){
+      const optionResult=await client.query(`Insert into poll_options(poll_id,option_text) values($1,$2) returning id,poll_id,option_text`,[poll.id,option.trim()]);
+      createdOptions.push(optionResult.rows[0]);
+    }
+    await client.query("COMMIT");
+    res.status(201).json({
+      ...poll,
+      options:createdOptions,
+    });
+  }catch(error){
+    await client.query("ROLLBACK");
+    console.error("Failed to create poll:",error);
+    res.status(500).json({
+      error:"Failed to create poll",
+    });
+  }finally{
+    client.release();
+  }
+})
 export default router;

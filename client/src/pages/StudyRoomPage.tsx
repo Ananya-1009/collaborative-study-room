@@ -4,7 +4,7 @@ import { AuthContext } from "../context/AuthContext";
 import {io} from "socket.io-client";
 function StudyRoomPage(){
     const {roomCode}=useParams();
-    const{accessToken,isInitializing}=useContext(AuthContext);
+    const{accessToken,isInitializing,user}=useContext(AuthContext);
     const socketRef=useRef<any>(null);
     useEffect(()=>{
         if(isInitializing || !accessToken){
@@ -84,6 +84,15 @@ function StudyRoomPage(){
                 data,
             ]);
         });
+        socket.on("problem-completed",(data)=>{
+            if(data.userId!==user?.id){
+                return;
+            }
+            setProblems((currentProblems)=>
+            currentProblems.map((problem)=>
+                problem.id===data.problemId?{...problem,completed:true}:problem
+            ));
+        });
         return ()=>{
             socket.disconnect();
         };
@@ -122,6 +131,7 @@ function StudyRoomPage(){
         topic:string;
         added_by:number;
         created_at:string;
+        completed:boolean;
     }[]>([]);
     const [problemTitle,setProblemTitle]=useState("");
     const [problemUrl,setProblemUrl]=useState("");
@@ -193,6 +203,29 @@ function StudyRoomPage(){
             setPdfTitle("");
         }catch(error){
             console.error("Failed to upload PDF:",error);
+        }
+    }
+    async function handleCompleteProblem(problemId:number){
+        try{
+            const response=await fetch(
+                `http://localhost:5000/api/rooms/${room.id}/problems/${problemId}/complete`,
+                {
+                    method:"POST",
+                    headers:{
+                        Authorization:`Bearer ${accessToken}`,
+                    },
+                }
+            );
+            const data=await response.json();
+            if(!response.ok){
+                console.error("Failed to complete problem:",data.error);
+                return;
+            }
+            setProblems((currentProblems)=>
+            currentProblems.map((problem)=>
+            problem.id===problemId ?{...problem,completed:true}:problem));
+        }catch(error){
+            console.error("Failed to complete problem:",error);
         }
     }
     async function handleAddResource(event:React.FormEvent){
@@ -651,6 +684,10 @@ function StudyRoomPage(){
                                                 target="_blank"
                                                 rel="nonreferrer">Open Problem</a>
                                         )}
+                                        <button type="button" onClick={()=>handleCompleteProblem(problem.id)}
+                                        disabled={problem.completed}>
+                                            {problem.completed?"Completed":"Mark as complete"}
+                                        </button>
                                         </div>
                                 ))}
                                 </div>
