@@ -542,6 +542,12 @@ router.post("/:id/polls",authenticate,requireRoomMember,async(req,res)=>{
       createdOptions.push(optionResult.rows[0]);
     }
     await client.query("COMMIT");
+    const roomResult=await pool.query(`SELECT code from rooms where id=$1`,[roomId]);
+    const roomCode=roomResult.rows[0].code;
+    io.to(`study-room-${roomCode}`).emit("new-poll",{
+      ...poll,
+      options:createdOptions,
+    });
     res.status(201).json({
       ...poll,
       options:createdOptions,
@@ -555,5 +561,69 @@ router.post("/:id/polls",authenticate,requireRoomMember,async(req,res)=>{
   }finally{
     client.release();
   }
-})
+});
+router.get("/:id/polls",authenticate,requireRoomMember,
+  async (req,res)=>{
+    const roomId=Number(req.params.id);
+    try{
+      const result=await pool.query(`Select polls.id,polls.room_id,polls.created_by,polls.question,polls.created_at,COALESCE(json_agg(json_build_object('id',poll_options.id,'option_text',poll_options.option_text) order by poll_options.id)Filter(where poll_options.id is not null),'[]')as options from polls left join poll_options on poll_options.poll_id=polls.id where polls.room_id=$1 group by polls.id order by polls.created_at asc`,[roomId]);
+      res.json(result.rows);
+    }catch(error){
+      console.error("Failed to fetch polls:",error);
+      res.status(500).json({
+        error:"Failed to fetch polls",
+      });
+    }
+  }
+);
+router.post(
+  "/:id/polls/:pollId/vote",
+  authenticate,
+  requireRoomMember,
+  async(req,res)=>{
+    const roomId=Number(req.params.id);
+    const pollId=Number(req.params.pollId);
+    const {optionId}=req.body;
+    if(!Number.isInteger(pollId) || pollId<=0){
+      return res.status(400).json({
+        error:"Invalid poll ID",
+      });
+    }
+    if(!Number.isInteger(optionId) || optionId<=0){
+      return res.status(400).json({
+        error:"Invalid option ID",
+      });
+    }
+    try {
+      const pollResult=await pool.query(
+        `SELECT id from polls where d=$1 and room_id=$2`,[pollId,roomId]
+      );
+      if(pollResult.rows.length===0){
+        return res.status(404).json({
+          error:"Poll not fount",
+        });
+      }
+      const optionResult=await pool.query(`Select id from poll_options where id=$1 and poll_id=$2`,[optionId,pollId]);
+      if(optionResult.rows.length===0){
+        return res.status(400).json({
+          error:"Option does not belong to this poll",
+        });
+      }
+      const result=await pool.query(
+        `Insert into poll_votes(poll_id,option_id,user_id)values($1,$2,$3) returning poll_id,option_id,user_id,voted_at`,[pollId,optionId,req.userId]
+      );
+      res.status(201).json(result.rows[0]);
+    }catch(error:any){
+      if(error.code==="23505"){
+        return res.status(409).json({
+          error:"You have already voted in this poll",
+        });
+      }
+      console.error("Failed to vote:",error);
+      res.status(500).json({
+        error:"Faoled to record vote",
+      });
+    }
+  }
+);
 export default router;

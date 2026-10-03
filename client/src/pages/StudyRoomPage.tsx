@@ -84,6 +84,12 @@ function StudyRoomPage(){
                 data,
             ]);
         });
+        socket.on("new-poll",(data)=>{
+            setPolls((currentPolls)=>[
+                ...currentPolls,
+                data,
+            ]);
+        });
         socket.on("problem-completed",(data)=>{
             if(data.userId!==user?.id){
                 return;
@@ -137,6 +143,42 @@ function StudyRoomPage(){
     const [problemUrl,setProblemUrl]=useState("");
     const [problemDifficulty,setProblemDifficulty]=useState("Easy");
     const [problemTopic,setProblemTopic]=useState("");
+    const [polls,setPolls]=useState<{id:number;room_id:number;created_by:number;question:string;created_at:string;options:{id:number;option_text:string;}[];}[]>([]);
+    const [pollQuestion,setPollQuestion]=useState("");
+    const [pollOptions,setPollOptions]=useState(["",""]);
+    async function handleCreatePoll(event:React.FormEvent){
+        event.preventDefault();
+        const cleanedOptions=pollOptions.map((option)=>option.trim()).filter(Boolean);
+        if(!pollQuestion.trim() || cleanedOptions.length<2){
+            return;
+        }
+        try{
+            const response=await fetch(
+                `http://localhost:5000/api/rooms/${room.id}/polls`,
+                {
+                    method:"POST",
+                    headers:{
+                        "Content-Type":"application/json",
+                        Authorization:`Bearer ${accessToken}`,
+                    },
+                    body: JSON.stringify({
+                        question:pollQuestion.trim(),
+                        options:cleanedOptions,
+                    }),
+                }
+            );
+            const data=await response.json();
+            console.log("POLL CREATED:", data);
+            if(!response.ok){
+                console.error("Failed to create poll:",data.error);
+                return;
+            }
+            setPollQuestion("");
+            setPollOptions(["",""]);
+        }catch(error){
+            console.error("Failed to create poll:",error);
+        }
+    }
     async function handleAddProblem(event: React.FormEvent){
         event.preventDefault();
         if(!problemTitle.trim() || !problemTopic.trim()){
@@ -265,6 +307,29 @@ function StudyRoomPage(){
             console.error("Failed to add resource:",error);
         }
     }
+    useEffect(()=>{
+        async function fetchPolls(){
+            try{
+                const response=await fetch(
+                    `http://localhost:5000/api/rooms/${room.id}/polls`,{
+                        headers:{
+                            Authorization:`Bearer ${accessToken}`,
+                        },
+                    }
+                );
+                const data=await response.json();
+                if(!response.ok){
+                    console.error("Failed to fetch polls:",data.error);
+                    return;
+                }
+                setPolls(data);
+            }catch(error){
+                console.error("Failed to fetch polls:",error);
+            }
+        }
+        if(accessToken && room){
+            fetchPolls();        }
+    },[accessToken,room]);
     useEffect(()=>{
         async function fetchProblems(){
             try{
@@ -733,6 +798,42 @@ function StudyRoomPage(){
                                 Send
                             </button>
                         </form>
+                    </div>
+                    <div className="study-panel">
+                        <h2>Create Poll</h2>
+                        <form onSubmit={handleCreatePoll}>
+                            <input type="text" placeholder="Ask a question..."
+                            value={pollQuestion}
+                            onChange={(event)=>setPollQuestion(event.target.value)}/>
+                            {pollOptions.map((option,index)=>(
+                                <input key={index} type="text" placeholder={`Option ${index+1}`}
+                                value={option}
+                                onChange={(event)=>{
+                                    const updateOptions=[...pollOptions];
+                                    updateOptions[index]=event.target.value;
+                                    setPollOptions(updateOptions);
+                                }}/>
+                            ))}
+                            <button type="submit">
+                                Create Poll
+                            </button>
+                        </form>
+                    </div>
+                    <div className="study-panel">
+                        <h2>Polls</h2>
+                        {polls.length===0?(
+                            <p>No polls yet.</p>):(
+                                polls.map((poll)=>(
+                                    <div key={poll.id}>
+                                        <h3>{poll.question}</h3>
+                                        {poll.options.map((option)=>(
+                                            <p key={option.id}>
+                                                {option.option_text}
+                                            </p>
+                            ))}
+                            </div>
+                         ))
+                        )}
                     </div>
                 </aside>
             </main>
